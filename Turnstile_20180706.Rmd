@@ -1,0 +1,108 @@
+---
+title: "MTA Turnstile Analysis"
+author: "Michael D'Acampora"
+date: "July 9, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+#APPENDIX
+
+First load pertinent libraries and pull data from mta.info, see code below.
+
+```{r message = FALSE}
+library(tidyverse)
+
+data <- read.csv("http://web.mta.info/developers/data/nyct/turnstile/turnstile_180707.txt")
+```
+
+
+After the data is pulled, the structure of the data set is inspected, revealing 197,130 rows and 11 columns, as well as the data type of each column variable, which is important moving forward.
+
+```{r}
+str(data)
+```
+
+Now that structure is understood, get the head of the data set. The first six rows are displayed to give you a snapshot. 
+```{r}
+head(data)
+```
+
+
+
+```{r}
+data2  <-  data %>%
+  filter((DATE == "06/30/2018" & TIME == "00:00:00") | (DATE == "07/06/2018" & TIME == "20:00:00")) %>%
+  mutate(Total_Enter = ENTRIES - lag(ENTRIES, 1),
+         Total_Exit =  EXITS - lag(EXITS, 1)) %>%
+  filter(Total_Enter > 0 & DATE == "07/06/2018") %>%
+  group_by(STATION) %>%
+  summarise(Week_Total_Entries = sum(Total_Enter),
+            Week_Total_Exits = sum(Total_Exit)) %>%
+  mutate(Difference = Week_Total_Entries - Week_Total_Exits) %>% 
+  filter(STATION != "LEXINGTON AV/63" & STATION != "BEACH 44 ST") %>%
+  arrange(desc(Week_Total_Entries)) 
+
+data2 %>% 
+  head(20)
+```
+
+
+
+```{r}
+data_viz <- data2[1:20,] %>% arrange(desc(Week_Total_Entries))
+```
+
+```{r message=FALSE}
+
+ggplot(data_viz, aes(x = reorder(STATION, Week_Total_Entries), y = Week_Total_Entries)) +
+  geom_bar(stat = "identity", fill = "navy", width = .5) +
+  geom_text(aes(label=Week_Total_Entries),
+            position=position_dodge(width = 0.1), hjust = -0.03, vjust = 0.5, size = 2.5) +
+    coord_flip() +
+  scale_y_continuous(labels = scales::comma) +
+  theme(text = element_text(size = 10)) +
+  labs(title = "20 Stations for Week Ending 7/6/2018",
+       subtitle = "Total turnstile entries at each station. Data courtesty of mta.info",
+       caption = "mdac",
+       x = "Station",
+       y = "Entries per station") 
+  
+ggsave("mdacplot.png")
+```
+
+```{r}
+data_viz_low <- tail(data2,20) %>% 
+  mutate(Total_traffic = Week_Total_Entries + Week_Total_Exits) %>% 
+  select(STATION, Total_traffic) %>% 
+  arrange(Total_traffic)
+
+data_viz_low
+```
+
+
+
+
+```{r message = FALSE}
+
+ggplot(data_viz_low, aes(x = reorder(STATION, -Total_traffic), y = Total_traffic)) +
+  geom_bar(stat = "identity", fill = "navy", width = .5) +
+  geom_text(aes(label = Total_traffic),
+            position = position_dodge(width = 0.1), hjust = -0.03, vjust = 0.5, size = 2.5) +
+  coord_flip() +
+  scale_y_continuous(labels = scales::comma) +
+  theme(text = element_text(size = 10)) +
+  labs(title = "Least Active Stations for Week Ending 7/6/2018",
+       subtitle = "Total turnstile entries and exits. Data courtesty of mta.info",
+       caption = "mdac",
+       x = "Station",
+       y = "Entries per station") 
+  
+
+
+ggsave("mdacplot2.png")
+```
+```
+
+
